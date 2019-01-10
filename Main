@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StringWriter;
+import java.util.Base64;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import java.io.BufferedReader;
@@ -195,8 +196,8 @@ public class Main {
             	
                 try {
                 	 FileOutputStream fos = new FileOutputStream("D:\\comp.zip");
-                	 ByteArrayOutputStream bozip = null;
-                	 ZipOutputStream zipOut = new ZipOutputStream(bozip);
+                	 ByteArrayOutputStream baos = new ByteArrayOutputStream(); 
+                	 ZipOutputStream zipOut = new ZipOutputStream(baos);
                 	 
                 	 
                 	 HttpEntity myEntity = response.getEntity();
@@ -209,12 +210,18 @@ public class Main {
                      while((length = fis.read(bytes)) >= 0) {
                          zipOut.write(bytes, 0, length);
                      }
+                     System.out.println("zipOut"+zipOut.toString()); 
                      zipOut.close();
                      fis.close();
+                     
                      fos.close();
-                  String zipoutput =   zipOut.toString();
-                  //createcontentversion(zipoutput);
-                     System.out.println("zipOut"+bozip); 
+                     byte[] bytes1 = baos.toByteArray();
+                     
+                    
+                  String encodedBase64 = new String(Base64.getEncoder().encodeToString(bytes1));
+                  //System.out.println("JSON result of Query:\n" + encodedBase64);
+                  createcontentversion(encodedBase64);
+                    
                                         //JSONObject json = new JSONObject(response_string);
                    // System.out.println("JSON result of Query:\n" + json.toString(1));
                    // JSONArray j = json.getJSONArray("records");
