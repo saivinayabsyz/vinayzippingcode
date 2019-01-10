@@ -1,0 +1,312 @@
+package Salesforce_Rest;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.StringWriter;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpDelete;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.message.BasicHeader;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.HttpStatus;
+import org.apache.http.util.EntityUtils;
+import org.apache.http.client.ClientProtocolException;
+import org.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONTokener;
+import org.json.JSONException;
+ 
+public class Main {
+ 
+    static final String USERNAME     = "nagasai@absyz.com";
+    static final String PASSWORD     = "SEG-automotive.75MYejHe7rAim5a4wo3jSxXRG5d";
+    static final String LOGINURL     = "https://test.salesforce.com";
+    static final String GRANTSERVICE = "/services/oauth2/token?grant_type=password";
+    static final String CLIENTID     = "3MVG9qQjGkWUbcrGNuUbReMq9iP19gRlr0qpoyXGpYAFicWw7FqfdW2E9UyN_FaQIVxkvWdLOariE6b7qBveM";
+    static final String CLIENTSECRET = "CEE48A09BA27B8CCCC2647D75BD2E5B4DD41528286664746BE69BFC741D0A7C0";
+    private static String REST_ENDPOINT = "/services/data" ;
+    private static String API_VERSION = "/v32.0" ;
+    private static String baseUri;
+    private static Header oauthHeader;
+    private static Header prettyPrintHeader = new BasicHeader("X-PrettyPrint", "1");
+    private static String Title ;
+    private static String Versiondata;
+    private static String loginInstanceUrl = null;
+    public static void main(String[] args) {
+ 
+        HttpClient httpclient = HttpClientBuilder.create().build();
+ 
+        // Assemble the login request URL
+        String loginURL = LOGINURL +
+                          GRANTSERVICE +
+                          "&client_id=" + CLIENTID +
+                          "&client_secret=" + CLIENTSECRET +
+                          "&username=" + USERNAME +
+                          "&password=" + PASSWORD;
+ 
+        // Login requests must be POSTs
+        HttpPost httpPost = new HttpPost(loginURL);
+        HttpResponse response = null;
+ 
+        try {
+            // Execute the login POST request
+            response = httpclient.execute(httpPost);
+        } catch (ClientProtocolException cpException) {
+            cpException.printStackTrace();
+        } catch (IOException ioException) {
+            ioException.printStackTrace();
+        }
+ 
+        // verify response is HTTP OK
+        final int statusCode = response.getStatusLine().getStatusCode();
+        if (statusCode != HttpStatus.SC_OK) {
+            System.out.println("Error authenticating to Force.com: "+statusCode);
+            // Error is in EntityUtils.toString(response.getEntity())
+            return;
+        }
+ 
+        String getResult = null;
+        try {
+            getResult = EntityUtils.toString(response.getEntity());
+        } catch (IOException ioException) {
+            ioException.printStackTrace();
+        }
+ 
+        JSONObject jsonObject = null;
+        String loginAccessToken = null;
+        
+ 
+        try {
+            jsonObject = (JSONObject) new JSONTokener(getResult).nextValue();
+            loginAccessToken = jsonObject.getString("access_token");
+            loginInstanceUrl = jsonObject.getString("instance_url");
+        } catch (JSONException jsonException) {
+            jsonException.printStackTrace();
+        }
+ 
+        baseUri = loginInstanceUrl + REST_ENDPOINT + API_VERSION ;
+        oauthHeader = new BasicHeader("Authorization", "OAuth " + loginAccessToken) ;
+        System.out.println("oauthHeader1: " + oauthHeader);
+        System.out.println("\n" + response.getStatusLine());
+        System.out.println("Successful login");
+        System.out.println("instance URL: "+loginInstanceUrl);
+        System.out.println("access token/session ID: "+loginAccessToken);
+        System.out.println("baseUri: "+ baseUri);        
+ 
+        // Run codes to query, isnert, update and delete records in Salesforce using REST API
+        querycontentversions();
+               
+ 
+        // release connection
+        httpPost.releaseConnection();
+    }
+ 
+    // Query Leads using REST HttpGet
+    public static void querycontentversions() {
+        System.out.println("\n_______________ Lead QUERY _______________");
+        try {
+ 
+            //Set up the HTTP objects needed to make the request.
+            HttpClient httpClient = HttpClientBuilder.create().build();
+ 
+            String uri = baseUri + "/query?q=Select+title+,+versiondata+From+contentversion+where+id+=+'0680D0000009YENQA2'";
+            System.out.println("Query URL: " + uri);
+            HttpGet httpGet = new HttpGet(uri);
+            System.out.println("oauthHeader2: " + oauthHeader);
+            httpGet.addHeader(oauthHeader);
+            httpGet.addHeader(prettyPrintHeader);
+ 
+            // Make the request.
+            HttpResponse response = httpClient.execute(httpGet);
+ 
+            // Process the result
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+                String response_string = EntityUtils.toString(response.getEntity());
+                try {
+                    JSONObject json = new JSONObject(response_string);
+                    System.out.println("JSON result of Query:\n" + json.toString(1));
+                    JSONArray j = json.getJSONArray("records");
+                    for (int i = 0; i < j.length(); i++){
+                        Title = json.getJSONArray("records").getJSONObject(i).getString("Title");
+                        Versiondata = json.getJSONArray("records").getJSONObject(i).getString("VersionData");
+                         System.out.println("Lead record is: " + i + ". " + Title + " " + Versiondata);
+                         querybody(Versiondata);
+                    }
+                } catch (JSONException je) {
+                    je.printStackTrace();
+                }
+            } else {
+                System.out.println("Query was unsuccessful. Status code returned is " + statusCode);
+                System.out.println("An error has occured. Http status: " + response.getStatusLine().getStatusCode());
+                System.out.println(getBody(response.getEntity().getContent()));
+                System.exit(-1);
+            }
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        } catch (NullPointerException npe) {
+            npe.printStackTrace();
+        }
+    }
+
+    
+    
+    
+    
+    // query Leads using REST HttpPost
+    
+    public static void querybody(String contenturl) {
+        System.out.println("\n_______________ Lead QUERY _______________");
+        try {
+ 
+            //Set up the HTTP objects needed to make the request.
+            HttpClient httpClient = HttpClientBuilder.create().build();
+ 
+            String uri = loginInstanceUrl+contenturl;
+            System.out.println("Query URL: " + uri);
+            HttpGet httpGet = new HttpGet(uri);
+            System.out.println("oauthHeader2: " + oauthHeader);
+            httpGet.addHeader(oauthHeader);
+            httpGet.addHeader(prettyPrintHeader);
+            
+            httpGet.addHeader("Content-type", "application/octet-stream");
+            // Make the request.
+            HttpResponse response = httpClient.execute(httpGet);
+            
+            // Process the result
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+            	
+                try {
+                	 FileOutputStream fos = new FileOutputStream("D:\\comp.zip");
+                	 ByteArrayOutputStream bozip = null;
+                	 ZipOutputStream zipOut = new ZipOutputStream(bozip);
+                	 
+                	 
+                	 HttpEntity myEntity = response.getEntity();
+                	 InputStream fis = myEntity.getContent(); 
+                	 ZipEntry zipEntry = new ZipEntry("javazip");
+                     zipOut.putNextEntry(zipEntry);
+                     byte[] bytes = new byte[1024];
+                     int length;
+                    // fis.o
+                     while((length = fis.read(bytes)) >= 0) {
+                         zipOut.write(bytes, 0, length);
+                     }
+                     zipOut.close();
+                     fis.close();
+                     fos.close();
+                  String zipoutput =   zipOut.toString();
+                  //createcontentversion(zipoutput);
+                     System.out.println("zipOut"+bozip); 
+                                        //JSONObject json = new JSONObject(response_string);
+                   // System.out.println("JSON result of Query:\n" + json.toString(1));
+                   // JSONArray j = json.getJSONArray("records");
+                   
+                } catch (JSONException je) {
+                    je.printStackTrace();
+                }
+            } else {
+                System.out.println("Query was unsuccessful. Status code returned is " + statusCode);
+                System.out.println("An error has occured. Http status: " + response.getStatusLine().getStatusCode());
+                System.out.println(getBody(response.getEntity().getContent()));
+                System.exit(-1);
+            }
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        } catch (NullPointerException npe) {
+            npe.printStackTrace();
+        }
+    }
+ 
+    public static void createcontentversion(String Zipdata) {
+    	 String uri = loginInstanceUrl+"/services/data/v39.0/sobjects/ContentVersion";
+    	
+    	 HttpClient httpClient = HttpClientBuilder.create().build();
+    	    HttpPost httpPost = new HttpPost(uri);
+    	    httpPost.setHeader("Content-type", "application/json");
+    	  
+    	    httpPost.addHeader(oauthHeader);
+    	    try {
+    	    	JSONObject obj = new JSONObject();
+
+    	        obj.put("Title","java");
+    	        obj.put("VersionData",Zipdata);
+    	        obj.put("PathOnClient","java.zip");
+    	       
+
+    	     
+    	        StringWriter out = new StringWriter();
+    	        obj.valueToString(obj);
+    	        String jsonstring  = obj.toString();
+    	        //obj.writeJSONString(out);
+    	        
+    	       
+    	        StringEntity stringEntity = new StringEntity(jsonstring);
+    	        httpPost.getRequestLine();
+    	        httpPost.setEntity(stringEntity);
+
+    	        HttpResponse response =  httpClient.execute(httpPost);
+    	        int statusCode = response.getStatusLine().getStatusCode();
+    	        
+    	        if (statusCode == 200) {
+                	
+                    try {
+                    	
+                        
+                         System.out.println("zipOut"); 
+                                            //JSONObject json = new JSONObject(response_string);
+                       // System.out.println("JSON result of Query:\n" + json.toString(1));
+                       // JSONArray j = json.getJSONArray("records");
+                       
+                    } catch (JSONException je) {
+                        je.printStackTrace();
+                    }
+                } else {
+                    System.out.println("Query was unsuccessful. Status code returned is " + statusCode);
+                    System.out.println("An error has occured. Http status: " + response.getStatusLine().getStatusCode());
+                    System.out.println(getBody(response.getEntity().getContent()));
+                    System.exit(-1);
+                }
+     
+    	        
+    	    } catch (Exception e) {
+    	        throw new RuntimeException(e);
+    	    }
+    }
+ 
+    private static String getBody(InputStream inputStream) {
+        String result = "";
+        try {
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(inputStream)
+            );
+            String inputLine;
+            while ( (inputLine = in.readLine() ) != null ) {
+                result += inputLine;
+                result += "\n";
+            }
+            in.close();
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+        System.out.println("result" + result);
+        return result;
+    }
+}
